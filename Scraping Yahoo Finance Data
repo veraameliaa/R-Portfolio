@@ -1,0 +1,69 @@
+#Input Library
+library(yfR) #Scraping Yahoo
+library(writexl)
+
+#=========================SELEKSI EMITEN COMPLETE CASE==========================
+#Daftar emiten yang ada:
+emiten <- readxl::read_excel("Daftar emiten.xlsx", sheet="Sheet2")
+
+#Periode yang diambil:
+start <- as.POSIXct("2022-02-01") #library base
+end <- as.POSIXct("2023-06-30")
+
+#Fungsi scraping volume
+get_volume <- function(ticker_list){
+  tabel <- data.frame()
+  for (ticker in ticker_list){
+    df <- yf_get(ticker, 
+                 first_date = start, 
+                 last_date = end,
+                 freq_data = "weekly",
+                 how_to_aggregate = "first"
+    )
+    a <- df[[8]] #Volume
+    b <- df[1,1]
+    c <- as.list(as.Date(df[[2]]))
+    tabel <- rbind(tabel, a)
+  }
+  return(tabel)
+}
+volume <- get_volume(emiten$Kode) #Collect volume
+volume <- cbind(emiten[,1], volume) #memasukkan nama emiten
+jumlah_angka_0 <- apply(volume==0,1,sum) 
+
+#0 artinya tidak ada transaksi, bisa karena hari libur atau suspensi
+volume$jumlah_angka_0 <- jumlah_angka_0
+volume <- volume[volume$jumlah_angka_0 == 0, ] #minimum dalam rentang
+
+#================================COLLECTING DATA================================
+#Fungsi scraping close price
+get_table <- function(ticker_list){
+  tabel <- data.frame()
+  for (ticker in ticker_list){
+    df <- yf_get(ticker, 
+                 first_date = start, 
+                 last_date = end,
+                 freq_data = "weekly",
+                 how_to_aggregate = "first")
+    a <- df[[6]] #close price
+    b <- df[1,1]
+    c <- as.list(as.Date(df[[2]]))
+    tabel <- rbind(tabel, a)
+  }
+  return(tabel)
+}
+price <- get_table(volume$Kode)
+price <- t(price)
+price <- as.data.frame(price)
+names(price) <- c(volume[,1])
+
+periode <- yf_get("PTSN.JK", 
+       first_date = start, 
+       last_date = end,
+       freq_data = "weekly",
+       how_to_aggregate = "first")
+periode <- as.data.frame(as.Date(periode[[2]]))
+
+price <- cbind(periode, price)
+names(price)[names(price)=="as.Date(periode[[2]])"] <- "periode"
+write_xlsx(price,"DATA.xlsx")
